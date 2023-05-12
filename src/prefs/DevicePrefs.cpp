@@ -34,7 +34,6 @@ other settings.
 #include <wx/combobox.h>
 #include <wx/log.h>
 #include <wx/textctrl.h>
-#include <wx/bmpbuttn.h>
 
 #include "portaudio.h"
 
@@ -43,32 +42,20 @@ other settings.
 #include "DeviceManager.h"
 #include "ProjectRate.h"
 
-#include "QualityPrefs.h"
-#include "QualitySettings.h"
-
-#include "AllThemeResources.h"
-#include "Theme.h"
-
-#define ID_DEFAULT_SAMPLE_RATE_CHOICE 7001
-
 enum {
    HostID = 10000,
    PlayID,
    RecordID,
-   ChannelsID,
-   DefaultSampleRateChoice,
-   ProjectSampleRateChoice
+   ChannelsID
 };
 
 BEGIN_EVENT_TABLE(DevicePrefs, PrefsPanel)
    EVT_CHOICE(HostID, DevicePrefs::OnHost)
    EVT_CHOICE(RecordID, DevicePrefs::OnDevice)
-   EVT_CHOICE(DefaultSampleRateChoice, DevicePrefs::OnDefaultSampleRateChoice)
-   EVT_CHOICE(DefaultSampleRateChoice, DevicePrefs::OnProjectSampleRateChoice)
 END_EVENT_TABLE()
 
 DevicePrefs::DevicePrefs(wxWindow * parent, wxWindowID winid, AudacityProject* project)
-:  PrefsPanel(parent, winid, XO("Audio Settings"))
+:  PrefsPanel(parent, winid, XO("Devices"))
 , mProject(project)
 {
    Populate();
@@ -86,7 +73,7 @@ ComponentInterfaceSymbol DevicePrefs::GetSymbol() const
 
 TranslatableString DevicePrefs::GetDescription() const
 {
-   return XO("Audio Settings");
+   return XO("Preferences for Device");
 }
 
 ManualPageID DevicePrefs::HelpPageName()
@@ -98,19 +85,6 @@ void DevicePrefs::Populate()
 {
    // First any pre-processing for constructing the GUI.
    GetNamesAndLabels();
-
-   mOtherDefaultSampleRateValue = QualitySettings::DefaultSampleRate.Read();
-   mOtherProjectSampleRateValue = mProject ?
-                                     ProjectRate::Get(*mProject).GetRate() :
-                                     mOtherDefaultSampleRateValue;
-
-   auto it = std::find(
-      mSampleRateValues.begin(), mSampleRateValues.end(),
-      mOtherProjectSampleRateValue);
-
-   mProjectSampleRateIndex = it == mSampleRateValues.end() ?
-                                mSampleRateNames.size() - 1 :
-                                std::distance(mSampleRateValues.begin(), it);
 
    // Get current setting for devices
    mPlayDevice = AudioIOPlaybackDevice.Read();
@@ -128,8 +102,6 @@ void DevicePrefs::Populate()
 
    wxCommandEvent e;
    OnHost(e);
-   OnDefaultSampleRateChoice(e);
-   OnProjectSampleRateChoice(e);
 }
 
 
@@ -153,33 +125,6 @@ void DevicePrefs::GetNamesAndLabels()
          }
       }
    }
-
-   //------------ Sample Rate Names
-   // JKC: I don't understand the following comment.
-   //      Can someone please explain or correct it?
-   // XXX: This should use a previously changed, but not yet saved
-   //      sound card setting from the "I/O" preferences tab.
-   // LLL: It means that until the user clicks "Ok" in preferences, the
-   //      GetSupportedSampleRates() call should use the devices they
-   //      may have changed on the Audio I/O page.  As coded, the sample
-   //      rates it will return could be completely invalid as they will
-   //      be what's supported by the devices that were selected BEFORE
-   //      coming into preferences.
-   //
-   //      GetSupportedSampleRates() allows passing in device names, but
-   //      how do you get at them as they are on the Audio I/O page????
-   for (int i = 0; i < AudioIOBase::NumStandardRates; i++)
-   {
-      int iRate = AudioIOBase::StandardRates[i];
-      mSampleRateValues.push_back(iRate);
-      mSampleRateNames.push_back(XO("%i Hz").Format(iRate));
-   }
-
-   mSampleRateNames.push_back(XO("Other..."));
-
-   // The label for the 'Other...' case can be any value at all.
-   mSampleRateValues.push_back(
-      44100); // If chosen, this value will be overwritten
 }
 
 void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
@@ -235,61 +180,6 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
    }
    S.EndStatic();
 
-
-   S.StartStatic(XO("Quality"));
-   {
-      S.StartMultiColumn(2);
-      {
-         if (mProject)
-         {
-            S.AddPrompt(XXO("&Project Sample Rate:"));
-
-            S.StartMultiColumn(3);
-            {
-               mProjectSampleRates =
-                  S.Id(ProjectSampleRateChoice)
-                     .TieChoice({}, mProjectSampleRateIndex, mSampleRateNames);
-
-               // Now do the edit box...
-               mOtherProjectSampleRate =
-                  S.TieNumericTextBox({}, mOtherProjectSampleRateValue, 15);
-
-               auto helpBtn = S.AddBitmapButton(theTheme.Bitmap(bmpHelpIcon));
-
-               const auto helpText =
-                  XO("Project Sample Rate used when recording new tracks and for playback, mixdowns and exports in this project")
-                     .Translation();
-               
-               helpBtn->SetToolTip(helpText);
-               helpBtn->SetLabel(helpText); // for screen readers
-               helpBtn->SetName(helpText);
-            }
-            S.EndMultiColumn();
-         }
-      }
-
-      S.AddPrompt(XXO("D&efault Sample Rate:"));
-
-      S.StartMultiColumn(2);
-      {
-         mDefaultSampleRates =
-            S.Id(DefaultSampleRateChoice)
-               .TieNumberAsChoice(
-                  {}, QualitySettings::DefaultSampleRate, mSampleRateNames,
-                  &mSampleRateValues, mSampleRateNames.size() - 1);
-
-         mOtherDefaultSampleRate =
-            S.TieNumericTextBox({}, mOtherDefaultSampleRateValue, 15);
-      }
-      S.EndMultiColumn();
-
-      S.TieChoice(
-         XXO("Default Sample &Format:"), QualitySettings::SampleFormatSetting);
-
-      S.EndMultiColumn();
-   }
-   S.EndStatic();
-
    // These previously lived in recording preferences.
    // However they are liable to become device specific.
    // Buffering also affects playback, not just recording, so is a device characteristic.
@@ -316,6 +206,37 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
       S.EndThreeColumn();
    }
    S.EndStatic();
+
+   if (mProject != nullptr)
+   {
+      S.StartStatic(XO("Quality"));
+      {
+         S.StartThreeColumn();
+
+         auto cmbProjectRate = S.AddCombo(XO("Project rate:"), {}, {});
+
+         for (auto i = 0; i < AudioIOBase::NumStandardRates; ++i)
+            cmbProjectRate->Append(
+               wxString::Format("%d", AudioIOBase::StandardRates[i]));
+
+         cmbProjectRate->SetValue(wxString::Format(
+            "%d", static_cast<int>(ProjectRate::Get(*mProject).GetRate())));
+
+         cmbProjectRate->Bind(
+            wxEVT_COMBOBOX,
+            [this, cmbProjectRate](auto)
+            {
+               long value;
+               if (cmbProjectRate->GetValue().ToLong(&value))
+                  ProjectRate::Get(*mProject).SetRate(value);
+            });
+
+         S.AddUnits(XO("Hz"));
+
+         S.EndThreeColumn();
+      }
+      S.EndStatic();
+   }
 
    S.EndScroller();
 
@@ -542,26 +463,6 @@ bool DevicePrefs::Commit()
 
    AudioIOLatencyDuration.Invalidate();
    AudioIOLatencyCorrection.Invalidate();
-
-   QualitySettings::DefaultSampleRate.Invalidate();
-
-   // The complex compound control may have value 'other' in which case the
-   // value in prefs comes from the second field.
-   if (mOtherDefaultSampleRate->IsEnabled())
-   {
-      QualitySettings::DefaultSampleRate.Write(mOtherDefaultSampleRateValue);
-      gPrefs->Flush();
-   }
-
-   if (mProject)
-   {
-      auto& projectRate = ProjectRate::Get(*mProject);
-      if (mOtherProjectSampleRate->IsEnabled())
-         projectRate.SetRate(mOtherProjectSampleRateValue);
-      else
-         projectRate.SetRate(mSampleRateValues[mProjectSampleRates->GetSelection()]);
-   }
-   
    return true;
 }
 
