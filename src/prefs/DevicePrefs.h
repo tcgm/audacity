@@ -17,7 +17,6 @@
 #include "PrefsPanel.h"
 
 class wxChoice;
-class wxTextCtrl;
 class ShuttleGui;
 
 #define DEVICE_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Device") }
@@ -37,12 +36,9 @@ class DevicePrefs final : public PrefsPanel
  private:
    void Populate();
    void GetNamesAndLabels();
-    
 
    void OnHost(wxCommandEvent & e);
    void OnDevice(wxCommandEvent & e);
-   void OnDefaultSampleRateChoice(wxCommandEvent& e);
-   void OnProjectSampleRateChoice(wxCommandEvent& e);
 
    AudacityProject* mProject;
 
@@ -59,9 +55,9 @@ class DevicePrefs final : public PrefsPanel
    wxChoice *mRecord;
    wxChoice *mChannels;
 
-   wxChoice* mProjectSampleRates { nullptr };
-   wxTextCtrl* mOtherProjectSampleRate { nullptr };
-   
+   wxChoice* mProjectSampleRates { nullptr };;
+   wxTextCtrl* mOtherProjectSampleRate { nullptr };;
+
    int mProjectSampleRateIndex;
    int mOtherProjectSampleRateValue;
 
